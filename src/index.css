@@ -1,0 +1,150 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/* Solo tema chiaro: la variante dark: dei componenti shadcn si attiverebbe solo con una classe .dark, mai usata. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-page: var(--page);
+  --color-rose-ink: var(--rose-ink);
+  --color-thumb: var(--thumb);
+  --color-ink: var(--ink);
+  --color-destructive-ink: var(--destructive-ink);
+  --shadow-card: 0 4px 14px rgb(126 69 83 / 5%);
+  --shadow-float: 0 6px 18px rgb(197 111 130 / 35%);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Palette del prototipo "Beauty Collection": rosa cipria, bianchi caldi, testo bruno.
+ * Solo tema chiaro, come nel prototipo.
+ */
+:root {
+  color-scheme: light;
+  /* Altezza della barra di navigazione in basso. */
+  --nav-h: 4.5rem;
+  --radius: 0.6875rem;
+  --page: #f6eeee;
+  --background: #fff9f7;
+  --foreground: #332d2d;
+  --card: #ffffff;
+  --card-foreground: #332d2d;
+  --popover: #ffffff;
+  --popover-foreground: #332d2d;
+  --primary: #c56f82;
+  --primary-foreground: #ffffff;
+  /* Rosa più scuro, per testi e icone su fondo chiaro. */
+  --rose-ink: #a95068;
+  --secondary: #f2e6e8;
+  --secondary-foreground: #64565a;
+  --muted: #f1e5e7;
+  --muted-foreground: #8a7779;
+  /* Cipria dei riquadri in evidenza. */
+  --accent: #f6dfe3;
+  --accent-foreground: #332d2d;
+  /* Fondo delle miniature. */
+  --thumb: #f5e3e6;
+  /* Pulsante scuro "+" della Home. */
+  --ink: #3c3435;
+  --destructive: #d95459;
+  --destructive-ink: #b83f48;
+  --warning: #b7791f;
+  --success: #3f8f6b;
+  --info: #5a6bb5;
+  --border: #eee1e3;
+  --input: #e6d8db;
+  --ring: #e0a6b2;
+  --chart-1: #f6dfe3;
+  --chart-2: #e0a6b2;
+  --chart-3: #c56f82;
+  --chart-4: #a95068;
+  --chart-5: #7e4553;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #332d2d;
+  --sidebar-primary: #c56f82;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f6dfe3;
+  --sidebar-accent-foreground: #332d2d;
+  --sidebar-border: #eee1e3;
+  --sidebar-ring: #e0a6b2;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-page text-foreground;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Niente frecce nei campi numerici. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
