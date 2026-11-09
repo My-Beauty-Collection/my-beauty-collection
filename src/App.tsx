@@ -254,7 +254,7 @@ export default function App() {
   return (
     <>
       {screen}
-      <Toaster position="top-center" richColors closeButton duration={2500} />
+      <Toaster />
     </>
   )
 }

@@ -392,7 +392,7 @@ export function ConfirmDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="rounded-[18px]">
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && <AlertDialogDescription>{description}</AlertDialogDescription>}
@@ -400,7 +400,7 @@ export function ConfirmDialog({
         <AlertDialogFooter>
           <AlertDialogCancel className="h-11">Annulla</AlertDialogCancel>
           <AlertDialogAction
-            className={cn('h-11', destructive && 'bg-destructive! text-white! hover:bg-destructive-ink!')}
+            className={cn('h-11', destructive && 'bg-destructive text-white hover:bg-destructive-ink')}
             onClick={onConfirm}
           >
             {confirmLabel}

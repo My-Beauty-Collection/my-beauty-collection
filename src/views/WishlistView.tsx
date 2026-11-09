@@ -99,7 +99,7 @@ export function WishlistView() {
 
   const remove = (item: WishItem) => {
     dispatch({ type: 'wish/delete', id: item.id })
-    toast(`"${item.name}" tolto dalla wishlist`, {
+    toast.success(`"${item.name}" tolto dalla wishlist`, {
       action: { label: 'Annulla', onClick: () => dispatch({ type: 'wish/save', item }) },
     })
   }
