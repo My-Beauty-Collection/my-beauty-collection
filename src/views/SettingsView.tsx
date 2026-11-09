@@ -1,15 +1,15 @@
-import { Download, LogOut, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Download, LogOut, Pencil, Sparkles, Trash2, Upload } from 'lucide-react'
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
-import { cardClass, ConfirmDialog, FormField, PageHeader, SectionTitle } from '../components/common'
+import { cardClass, ConfirmDialog, FormField, Link, PageHeader, SectionTitle } from '../components/common'
 import { demoData } from '../data/demo'
-import { CATEGORIES } from '../data/taxonomy'
 import { emptyData, exportFileName, parseData } from '../lib/storage'
 import type { AppData } from '../lib/types'
+import { paths } from '../router'
 import { useStore } from '../store'
 
 function NameForm() {
@@ -51,8 +51,7 @@ export function SettingsView() {
   const [confirmWipe, setConfirmWipe] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
 
-  const typeCount = CATEGORIES.reduce((n, c) => n + c.subcategories.reduce((m, s) => m + s.types.length, 0), 0)
-  const subCount = CATEGORIES.reduce((n, c) => n + c.subcategories.length, 0)
+  const customCount = data.customTaxonomy.length
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -102,6 +101,19 @@ export function SettingsView() {
         )}
       </div>
 
+      <SectionTitle>Categorie</SectionTitle>
+      <div className={cn(cardClass, 'p-4')}>
+        <p className="text-[13px] text-muted-foreground">
+          Le categorie predefinite sono uguali per tutti. Puoi aggiungere categorie, sottocategorie e tipologie solo
+          tue: {customCount ? `ne hai ${customCount}.` : 'per ora non ne hai.'}
+        </p>
+        <Button asChild variant="outline" className="mt-3 h-11 w-full">
+          <Link to={paths.catalog}>
+            <Pencil className="size-4" /> Gestisci categorie
+          </Link>
+        </Button>
+      </div>
+
       <SectionTitle>Backup</SectionTitle>
       <div className={cn(cardClass, 'p-4')}>
         <p className="text-[13px] text-muted-foreground">
@@ -123,8 +135,7 @@ export function SettingsView() {
       <div className={cn(cardClass, 'p-4')}>
         <p className="text-[13px] text-muted-foreground">
           {data.products.length} prodotti · {data.combos.length} Lip Combo · {data.wishlist.length} desideri in
-          wishlist. Catalogo con {CATEGORIES.length} categorie, {subCount} sottocategorie e {typeCount} tipologie
-          Make-up.
+          wishlist · {customCount} voci personali del catalogo.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button
@@ -153,7 +164,7 @@ export function SettingsView() {
         title="Importare il backup?"
         description={
           pendingImport &&
-          `Il file contiene ${pendingImport.products.length} prodotti, ${pendingImport.combos.length} Lip Combo e ${pendingImport.wishlist.length} desideri. Sostituiranno i dati attuali.`
+          `Il file contiene ${pendingImport.products.length} prodotti, ${pendingImport.combos.length} Lip Combo, ${pendingImport.wishlist.length} desideri e ${pendingImport.customTaxonomy.length} voci personali del catalogo. Sostituiranno i dati attuali.`
         }
         confirmLabel="Importa"
         onConfirm={() => {
@@ -167,7 +178,7 @@ export function SettingsView() {
         open={confirmWipe}
         onOpenChange={setConfirmWipe}
         title="Cancellare tutto?"
-        description="Verranno eliminati tutti i prodotti, le foto, le Lip Combo e la wishlist. L'operazione non si può annullare."
+        description="Verranno eliminati tutti i prodotti, le foto, le Lip Combo, la wishlist e le categorie personali. L'operazione non si può annullare."
         confirmLabel="Cancella tutto"
         destructive
         onConfirm={() => {

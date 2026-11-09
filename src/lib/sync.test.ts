@@ -5,15 +5,17 @@ import { reducer } from './reducer'
 import { emptyData } from './storage'
 import {
   comboToRow,
+  customToRow,
   diffData,
   hasChanges,
   productToRow,
   rowToCombo,
+  rowToCustom,
   rowToProduct,
   rowToWish,
   wishToRow,
 } from './sync'
-import type { AppData, LipCombo, Product, WishItem } from './types'
+import type { AppData, CustomTaxonomyItem, LipCombo, Product, WishItem } from './types'
 
 const USER = '00000000-0000-0000-0000-000000000001'
 
@@ -107,5 +109,29 @@ describe('diffData', () => {
     const next = reducer(base, { type: 'wish/save', item })
     expect(diffData(base, next).upsertWishes.map((w) => w.name)).toEqual(['Mascara'])
     expect(diffData(next, reducer(next, { type: 'wish/delete', id: 'w' })).deleteWishIds).toEqual(['w'])
+  })
+})
+
+describe('catalogo personale', () => {
+  const item: CustomTaxonomyItem = {
+    id: 'u-unghie',
+    level: 'category',
+    parentId: '',
+    name: 'Unghie',
+    icon: 'nail-polish',
+    createdAt: '2026-11-09T10:00:00.000Z',
+  }
+
+  it('round-trips a custom item and rejects invalid rows', () => {
+    expect(rowToCustom(customToRow(item, USER))).toEqual(item)
+    expect(rowToCustom({ ...customToRow(item, USER), id: 'skincare' })).toBeNull()
+    expect(rowToCustom({ ...customToRow(item, USER), icon: 'sconosciuta' })?.icon).toBe('toiletry-bag')
+  })
+
+  it('upserts new items and deletes removed ones', () => {
+    const next = reducer(emptyData(), { type: 'taxonomy/save', item })
+    expect(diffData(emptyData(), next).upsertCustom.map((i) => i.id)).toEqual(['u-unghie'])
+    const removed = reducer(next, { type: 'taxonomy/delete', id: 'u-unghie' })
+    expect(diffData(next, removed).deleteCustomIds).toEqual(['u-unghie'])
   })
 })

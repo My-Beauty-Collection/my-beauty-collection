@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CATEGORIES, getCategory, getSubcategory, type TaxonomyRef } from '../data/taxonomy'
+import { allCategories, getCategory, getSubcategory, type TaxonomyRef } from '../data/taxonomy'
 import { BeautyIcon } from './BeautyIcon'
 import type { BeautyIconName } from './beauty-icons'
 import { FormField } from './common'
@@ -82,7 +82,7 @@ export function CategoryFields({
           value={value.categoryId}
           invalid={Boolean(categoryError)}
           noneLabel={optional ? 'Nessuna categoria' : undefined}
-          options={CATEGORIES.map((c) => ({ value: c.id, label: c.name, icon: c.icon }))}
+          options={allCategories().map((c) => ({ value: c.id, label: c.name, icon: c.icon }))}
           onChange={(categoryId) => onChange({ categoryId, subcategoryId: '', typeId: null })}
         />
       </FormField>

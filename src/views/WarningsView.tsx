@@ -1,7 +1,9 @@
 import { ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { EmptyState, PageHeader, RowList, SegmentedTabs } from '../components/common'
+import { DeleteProductDialog } from '../components/DeleteProductDialog'
 import { WarningRow } from '../components/ProductRow'
+import type { Product } from '../lib/types'
 import { useStore } from '../store'
 
 type Filter = 'tutte' | 'pao' | 'scaduti'
@@ -9,6 +11,7 @@ type Filter = 'tutte' | 'pao' | 'scaduti'
 export function WarningsView() {
   const { warnings } = useStore()
   const [filter, setFilter] = useState<Filter>('tutte')
+  const [toDelete, setToDelete] = useState<Product | null>(null)
   const counts = {
     tutte: warnings.length,
     pao: warnings.filter((w) => w.paoExceeded).length,
@@ -46,12 +49,13 @@ export function WarningsView() {
           ) : (
             <RowList>
               {visible.map((w) => (
-                <WarningRow key={w.product.id} warning={w} />
+                <WarningRow key={w.product.id} warning={w} onDelete={() => setToDelete(w.product)} />
               ))}
             </RowList>
           )}
         </>
       )}
+      <DeleteProductDialog product={toDelete} onClose={() => setToDelete(null)} />
     </>
   )
 }

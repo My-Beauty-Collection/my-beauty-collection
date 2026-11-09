@@ -7,9 +7,14 @@
  *
  * Gli id sono stabili: i prodotti salvati li referenziano, quindi NON vanno rinominati.
  * Dove possibile riusano quelli della prima versione dell'app; il resto è mappato in `migrateTaxonomy`.
+ *
+ * Le voci predefinite (`CATEGORIES`) sono uguali per tutti. Ogni utente può aggiungere le proprie
+ * categorie, sottocategorie e tipologie (`CustomTaxonomyItem`, id con prefisso `u-`): il catalogo
+ * in uso, predefinito più personale, è quello restituito da `allCategories()`, `getCategory()` ecc.
  */
 
 import type { BeautyIconName } from '../components/beauty-icons'
+import type { CustomTaxonomyItem } from '../lib/types'
 
 export type ZoneId = 'viso' | 'occhi' | 'labbra' | 'capelli' | 'corpo'
 
@@ -30,6 +35,8 @@ export interface ProductType {
   id: string
   name: string
   icon: BeautyIconName
+  /** Voce aggiunta dall'utente. */
+  custom?: true
 }
 
 export interface Subcategory {
@@ -39,6 +46,8 @@ export interface Subcategory {
   zones: ZoneId[]
   /** Tipologie: previste solo per il Make-up. */
   types: ProductType[]
+  /** Voce aggiunta dall'utente. */
+  custom?: true
 }
 
 export interface Category {
@@ -49,6 +58,8 @@ export interface Category {
   /** Zone predefinite quando la categoria non ha sottocategorie (Profumi). */
   zones: ZoneId[]
   subcategories: Subcategory[]
+  /** Voce aggiunta dall'utente. */
+  custom?: true
 }
 
 export function slugify(text: string): string {
@@ -175,28 +186,140 @@ export const OTHER_ICON: BeautyIconName = 'toiletry-bag'
 export const LIP_LINER_TYPE = 'mu-labbra/matite-labbra'
 export const LIP_SUBCATEGORY = 'mu-labbra'
 
-// ---------- Lookup ----------
+/** Categorie organizzate per tipologia (schede per zona e righe per tipologia): il Make-up. */
+const TYPED_CATEGORIES = new Set(CATEGORIES.filter((c) => c.subcategories.some((s) => s.types.length > 0)).map((c) => c.id))
 
-const categoryById = new Map(CATEGORIES.map((c) => [c.id, c]))
-const subcategoryById = new Map<string, { category: Category; subcategory: Subcategory }>()
-const typeById = new Map<string, { subcategory: Subcategory; type: ProductType }>()
-for (const category of CATEGORIES) {
-  for (const subcategory of category.subcategories) {
-    subcategoryById.set(subcategory.id, { category, subcategory })
-    for (const type of subcategory.types) typeById.set(type.id, { subcategory, type })
+/** La categoria ha le tipologie (Make-up)? Solo lì si possono aggiungere tipologie personali. */
+export function usesTypes(categoryId: string): boolean {
+  return TYPED_CATEGORIES.has(categoryId)
+}
+
+// ---------- Catalogo: voci predefinite + voci personali ----------
+
+export const CUSTOM_PREFIX = 'u-'
+
+export function isCustomId(id: string | null | undefined): boolean {
+  return Boolean(id?.startsWith(CUSTOM_PREFIX))
+}
+
+export interface TaxonomyRef {
+  categoryId: string
+  subcategoryId: string
+  typeId: string | null
+}
+
+/** Catalogo completo con le ricerche per id. Le voci personali orfane (genitore inesistente) vengono ignorate. */
+export class Taxonomy {
+  readonly categories: Category[]
+  private readonly categoryById = new Map<string, Category>()
+  private readonly subcategoryById = new Map<string, { category: Category; subcategory: Subcategory }>()
+  private readonly typeById = new Map<string, { subcategory: Subcategory; type: ProductType }>()
+
+  constructor(custom: readonly CustomTaxonomyItem[] = []) {
+    const own = (level: CustomTaxonomyItem['level']) => custom.filter((i) => i.level === level && isCustomId(i.id))
+
+    this.categories = [
+      ...CATEGORIES.map((c) => ({ ...c, subcategories: c.subcategories.map((s) => ({ ...s, types: [...s.types] })) })),
+      ...own('category').map((i): Category => ({ id: i.id, name: i.name, icon: i.icon, zones: [], subcategories: [], custom: true })),
+    ]
+    for (const c of this.categories) this.categoryById.set(c.id, c)
+
+    for (const i of own('subcategory')) {
+      const parent = this.categoryById.get(i.parentId)
+      parent?.subcategories.push({ id: i.id, name: i.name, icon: i.icon, zones: [...parent.zones], types: [], custom: true })
+    }
+    for (const category of this.categories) {
+      for (const subcategory of category.subcategories) this.subcategoryById.set(subcategory.id, { category, subcategory })
+    }
+
+    for (const i of own('type')) {
+      const parent = this.subcategoryById.get(i.parentId)
+      if (parent && usesTypes(parent.category.id)) {
+        parent.subcategory.types.push({ id: i.id, name: i.name, icon: i.icon, custom: true })
+      }
+    }
+    for (const { subcategory } of this.subcategoryById.values()) {
+      for (const type of subcategory.types) this.typeById.set(type.id, { subcategory, type })
+    }
+  }
+
+  getCategory(id: string): Category | undefined {
+    return this.categoryById.get(id)
+  }
+
+  getSubcategory(id: string): Subcategory | undefined {
+    return this.subcategoryById.get(id)?.subcategory
+  }
+
+  getProductType(id: string | null): ProductType | undefined {
+    return id ? this.typeById.get(id)?.type : undefined
+  }
+
+  /** Categoria a cui appartiene la sottocategoria. */
+  categoryOf(subcategoryId: string): Category | undefined {
+    return this.subcategoryById.get(subcategoryId)?.category
+  }
+
+  /** Sottocategoria a cui appartiene la tipologia. */
+  subcategoryOf(typeId: string): Subcategory | undefined {
+    return this.typeById.get(typeId)?.subcategory
+  }
+
+  /** La voce personale è presente nel catalogo (cioè il suo genitore esiste)? */
+  has(item: Pick<CustomTaxonomyItem, 'id' | 'level'>): boolean {
+    const found =
+      item.level === 'category'
+        ? this.getCategory(item.id)
+        : item.level === 'subcategory'
+          ? this.getSubcategory(item.id)
+          : this.getProductType(item.id)
+    return found?.custom === true
+  }
+
+  /**
+   * Riferimento coerente con il catalogo: azzera sottocategoria e tipologia inesistenti o fuori posto.
+   * Una categoria sconosciuta resta com'è (il prodotto finisce in "Altro", da riassegnare).
+   */
+  fit(ref: TaxonomyRef): TaxonomyRef {
+    const { categoryId } = ref
+    if (!this.getCategory(categoryId)) return { categoryId, subcategoryId: '', typeId: null }
+    const subcategoryId = this.categoryOf(ref.subcategoryId)?.id === categoryId ? ref.subcategoryId : ''
+    const typeId = subcategoryId && ref.typeId && this.subcategoryOf(ref.typeId)?.id === subcategoryId ? ref.typeId : null
+    return { categoryId, subcategoryId, typeId }
   }
 }
 
+/** Solo le voci predefinite. */
+const DEFAULT_TAXONOMY = new Taxonomy()
+
+/** Catalogo in uso (predefinito + personale): lo aggiorna lo store quando cambiano le voci personali. */
+let active = DEFAULT_TAXONOMY
+
+export function activateTaxonomy(custom: readonly CustomTaxonomyItem[]): Taxonomy {
+  active = custom.length ? new Taxonomy(custom) : DEFAULT_TAXONOMY
+  return active
+}
+
+/** Tutte le categorie: le predefinite e poi quelle personali. */
+export function allCategories(): Category[] {
+  return active.categories
+}
+
 export function getCategory(id: string): Category | undefined {
-  return categoryById.get(id)
+  return active.getCategory(id)
 }
 
 export function getSubcategory(id: string): Subcategory | undefined {
-  return subcategoryById.get(id)?.subcategory
+  return active.getSubcategory(id)
 }
 
 export function getProductType(id: string | null): ProductType | undefined {
-  return id ? typeById.get(id)?.type : undefined
+  return active.getProductType(id)
+}
+
+/** Categoria a cui appartiene la sottocategoria. */
+export function categoryOfSubcategory(subcategoryId: string): Category | undefined {
+  return active.categoryOf(subcategoryId)
 }
 
 /** Icona più specifica disponibile: tipologia, poi sottocategoria, poi categoria. */
@@ -207,6 +330,21 @@ export function taxonomyIcon(ref: { categoryId: string; subcategoryId: string; t
     getCategory(ref.categoryId)?.icon ??
     OTHER_ICON
   )
+}
+
+/** Id della voce personale e di tutte quelle che contiene (sottocategorie, tipologie). */
+export function customDescendants(items: readonly CustomTaxonomyItem[], id: string): Set<string> {
+  const ids = new Set([id])
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const i of items) {
+      if (!ids.has(i.id) && ids.has(i.parentId)) {
+        ids.add(i.id)
+        grew = true
+      }
+    }
+  }
+  return ids
 }
 
 export function getZone(id: ZoneId): Zone | undefined {
@@ -264,15 +402,10 @@ const LEGACY_TYPE_TO_SUB: Record<string, string> = {
   'sieri/olio-viso': 'oli-viso',
 }
 
-export interface TaxonomyRef {
-  categoryId: string
-  subcategoryId: string
-  typeId: string | null
-}
-
 /**
  * Porta un riferimento alla tassonomia attuale: converte le vecchie voci note e azzera
- * sottocategoria/tipologia non più esistenti (il prodotto resta nella sua categoria).
+ * sottocategoria/tipologia predefinite non più esistenti (il prodotto resta nella sua categoria).
+ * Le voci personali (`u-…`) restano: si verificano dopo, con il catalogo dell'utente (`Taxonomy.fit`).
  */
 export function migrateTaxonomy(ref: TaxonomyRef): TaxonomyRef {
   let { categoryId, subcategoryId, typeId } = ref
@@ -283,13 +416,10 @@ export function migrateTaxonomy(ref: TaxonomyRef): TaxonomyRef {
     typeId = null
   }
 
-  const category = getCategory(categoryId)
-  if (!category) return { categoryId, subcategoryId: '', typeId: null }
-
-  const owner = subcategoryById.get(subcategoryId)
-  if (!owner || owner.category.id !== category.id) subcategoryId = ''
-  const typeOwner = typeId ? typeById.get(typeId) : undefined
-  if (!typeOwner || typeOwner.subcategory.id !== subcategoryId) typeId = null
-
-  return { categoryId, subcategoryId, typeId }
+  const fitted = DEFAULT_TAXONOMY.fit({ categoryId, subcategoryId, typeId })
+  return {
+    categoryId,
+    subcategoryId: isCustomId(subcategoryId) ? subcategoryId : fitted.subcategoryId,
+    typeId: isCustomId(typeId) ? typeId : fitted.typeId,
+  }
 }

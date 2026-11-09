@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { activateTaxonomy, type Taxonomy } from './data/taxonomy'
 import { todayIso } from './lib/dates'
 import { deletePhoto, savePhoto } from './lib/photos'
 import { computeWarnings, type ProductWarning } from './lib/products'
@@ -33,6 +34,8 @@ interface Store {
   today: string
   /** Prodotti con PAO superato o scaduti. */
   warnings: ProductWarning[]
+  /** Catalogo in uso: voci predefinite più quelle personali dell'utente. */
+  taxonomy: Taxonomy
   auth: AuthState
   sync: SyncState
   syncError: string | null
@@ -247,6 +250,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDisplayNameState(value)
   }, [])
 
+  // Il catalogo personale va attivato prima di disegnare le pagine, che lo leggono (getCategory ecc.).
+  const taxonomy = useMemo(() => activateTaxonomy(data.customTaxonomy), [data.customTaxonomy])
   const warnings = useMemo(() => computeWarnings(data.products, today), [data.products, today])
   const value = useMemo(
     () => ({
@@ -254,6 +259,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dispatch,
       today,
       warnings,
+      taxonomy,
       auth,
       sync,
       syncError,
@@ -264,7 +270,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       displayName,
       setDisplayName,
     }),
-    [data, today, warnings, auth, sync, syncError, retry, signOut, uploadPhoto, removePhoto, displayName, setDisplayName],
+    [data, today, warnings, taxonomy, auth, sync, syncError, retry, signOut, uploadPhoto, removePhoto, displayName, setDisplayName],
   )
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

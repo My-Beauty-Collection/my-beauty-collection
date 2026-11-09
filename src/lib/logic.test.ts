@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { CATEGORIES, defaultZones, LIP_LINER_TYPE, migrateTaxonomy, needsSubcategory, ZONES } from '../data/taxonomy'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  activateTaxonomy,
+  allCategories,
+  CATEGORIES,
+  defaultZones,
+  LIP_LINER_TYPE,
+  migrateTaxonomy,
+  needsSubcategory,
+  Taxonomy,
+  ZONES,
+} from '../data/taxonomy'
 import { addDays, addMonths, daysBetween, isIsoDate } from './dates'
 import {
   canPair,
@@ -17,7 +27,7 @@ import {
 } from './products'
 import { reducer } from './reducer'
 import { emptyData, loadData, parseData, saveData, STORAGE_KEY } from './storage'
-import type { LipCombo, Product } from './types'
+import type { CustomTaxonomyItem, LipCombo, Product } from './types'
 
 const TODAY = '2026-11-09'
 
@@ -297,5 +307,109 @@ describe('search', () => {
     expect(matchesSearch(p, 'nabla matite')).toBe(true)
     expect(matchesSearch(p, 'labbra')).toBe(true)
     expect(matchesSearch(p, 'mascara')).toBe(false)
+  })
+})
+
+// ---------- Catalogo personale ----------
+
+describe('catalogo personale', () => {
+  const item = (id: string, level: CustomTaxonomyItem['level'], parentId: string, name: string): CustomTaxonomyItem => ({
+    id,
+    level,
+    parentId,
+    name,
+    icon: 'nail-polish',
+    createdAt: '2026-11-09T10:00:00.000Z',
+  })
+  const custom = [
+    item('u-unghie', 'category', '', 'Unghie'),
+    item('u-smalti', 'subcategory', 'u-unghie', 'Smalti'),
+    item('u-tonici', 'subcategory', 'skincare', 'Tonici'),
+    item('u-kajal', 'type', 'mu-occhi', 'Matite kajal'),
+    item('u-tipo-skincare', 'type', 'u-tonici', 'Non ammessa'),
+    item('u-orfana', 'subcategory', 'u-inesistente', 'Orfana'),
+  ]
+
+  afterEach(() => {
+    activateTaxonomy([])
+  })
+
+  it('aggiunge le voci personali dopo le predefinite, che restano uguali', () => {
+    const tx = new Taxonomy(custom)
+    expect(tx.categories.map((c) => c.name)).toEqual([...CATEGORIES.map((c) => c.name), 'Unghie'])
+    expect(tx.getCategory('u-unghie')?.subcategories.map((s) => s.name)).toEqual(['Smalti'])
+    expect(tx.getCategory('skincare')?.subcategories.at(-1)).toMatchObject({ id: 'u-tonici', zones: ['viso'], custom: true })
+    expect(tx.subcategoryOf('u-kajal')?.id).toBe('mu-occhi')
+    // Tipologie solo dove la categoria le prevede (Make-up); le voci orfane non compaiono.
+    expect(tx.getProductType('u-tipo-skincare')).toBeUndefined()
+    expect(tx.has(custom[4])).toBe(false)
+    expect(tx.has(custom[5])).toBe(false)
+    // Le predefinite non vengono toccate.
+    expect(CATEGORIES.find((c) => c.id === 'skincare')!.subcategories.some((s) => s.id === 'u-tonici')).toBe(false)
+  })
+
+  it('attiva il catalogo per ricerche, sottocategorie obbligatorie e ricerca testuale', () => {
+    expect(needsSubcategory('u-unghie')).toBe(false)
+    activateTaxonomy(custom)
+    expect(allCategories().at(-1)?.name).toBe('Unghie')
+    expect(needsSubcategory('u-unghie')).toBe(true)
+    expect(defaultZones('skincare', 'u-tonici')).toEqual(['viso'])
+    expect(matchesSearch(product({ categoryId: 'u-unghie', subcategoryId: 'u-smalti' }), 'smalti')).toBe(true)
+  })
+
+  it('migrateTaxonomy lascia le voci personali, assembleData toglie quelle inesistenti', () => {
+    expect(migrateTaxonomy({ categoryId: 'skincare', subcategoryId: 'u-tonici', typeId: null }).subcategoryId).toBe('u-tonici')
+    expect(migrateTaxonomy({ categoryId: 'u-unghie', subcategoryId: 'creme', typeId: null }).subcategoryId).toBe('')
+    const json = JSON.stringify({
+      products: [
+        product({ id: 'a', categoryId: 'skincare', subcategoryId: 'u-tonici' }),
+        product({ id: 'b', categoryId: 'makeup', subcategoryId: 'mu-occhi', typeId: 'u-cancellata' }),
+        product({ id: 'c', categoryId: 'u-unghie', subcategoryId: 'u-smalti' }),
+      ],
+      customTaxonomy: [...custom, { id: 'senza-prefisso', level: 'category', parentId: '', name: 'X' }],
+    })
+    const data = parseData(json)
+    expect(data.products.map((p) => [p.subcategoryId, p.typeId])).toEqual([
+      ['u-tonici', null],
+      ['mu-occhi', null],
+      ['u-smalti', null],
+    ])
+    expect(data.customTaxonomy.map((i) => i.id)).toEqual(['u-unghie', 'u-smalti', 'u-tonici', 'u-kajal'])
+    // I backup senza catalogo personale restano validi.
+    expect(parseData(JSON.stringify({ products: [] })).customTaxonomy).toEqual([])
+  })
+
+  it('eliminando una voce i prodotti passano al livello superiore', () => {
+    const state = {
+      ...emptyData(),
+      customTaxonomy: custom.slice(0, 4),
+      products: [
+        product({ id: 'smalto', categoryId: 'u-unghie', subcategoryId: 'u-smalti' }),
+        product({ id: 'tonico', categoryId: 'skincare', subcategoryId: 'u-tonici' }),
+        product({ id: 'kajal', categoryId: 'makeup', subcategoryId: 'mu-occhi', typeId: 'u-kajal' }),
+      ],
+      wishlist: [
+        { id: 'w', name: 'Top coat', brand: '', categoryId: 'u-unghie', subcategoryId: 'u-smalti', typeId: null, note: '', createdAt: '' },
+      ],
+    }
+    const noNails = reducer(state, { type: 'taxonomy/delete', id: 'u-unghie' })
+    expect(noNails.customTaxonomy.map((i) => i.id)).toEqual(['u-tonici', 'u-kajal'])
+    expect(noNails.products[0]).toMatchObject({ categoryId: '', subcategoryId: '' })
+    expect(noNails.products[0].updatedAt).not.toBe(state.products[0].updatedAt)
+    expect(noNails.products[1]).toBe(state.products[1])
+    expect(noNails.wishlist[0]).toMatchObject({ categoryId: '', subcategoryId: '' })
+
+    const noToners = reducer(state, { type: 'taxonomy/delete', id: 'u-tonici' })
+    expect(noToners.products[1]).toMatchObject({ categoryId: 'skincare', subcategoryId: '' })
+    const noKajal = reducer(state, { type: 'taxonomy/delete', id: 'u-kajal' })
+    expect(noKajal.products[2]).toMatchObject({ subcategoryId: 'mu-occhi', typeId: null })
+  })
+
+  it('salva e rinomina una voce personale', () => {
+    let state = reducer(emptyData(), { type: 'taxonomy/save', item: item('u-x', 'category', '', '  Igiene  ') })
+    expect(state.customTaxonomy).toMatchObject([{ id: 'u-x', name: 'Igiene' }])
+    state = reducer(state, { type: 'taxonomy/save', item: { ...state.customTaxonomy[0], name: 'Igiene orale' } })
+    expect(state.customTaxonomy.map((i) => i.name)).toEqual(['Igiene orale'])
+    expect(reducer(state, { type: 'taxonomy/save', item: item('u-y', 'category', '', '   ') })).toBe(state)
   })
 })

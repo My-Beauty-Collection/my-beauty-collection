@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CustomLevel } from './lib/types'
 
 export interface ProductPrefill {
   categoryId?: string
@@ -27,6 +28,14 @@ export type Route =
   | { name: 'wishlist' }
   | { name: 'warnings' }
   | { name: 'settings' }
+  /** Gestione del catalogo: categorie → sottocategorie → (Make-up) tipologie. */
+  | { name: 'catalog' }
+  | { name: 'catalog-category'; categoryId: string }
+  | { name: 'catalog-subcategory'; categoryId: string; subcategoryId: string }
+  | { name: 'catalog-new'; level: CustomLevel; parentId: string }
+  | { name: 'catalog-edit'; id: string }
+
+const LEVELS: CustomLevel[] = ['category', 'subcategory', 'type']
 
 export function parseHash(hash: string): Route {
   const [path, query = ''] = hash.replace(/^#/, '').split('?')
@@ -68,6 +77,20 @@ export function parseHash(hash: string): Route {
       return { name: 'warnings' }
     case 'impostazioni':
       return { name: 'settings' }
+    case 'categorie': {
+      if (parts[1] === 'nuova') {
+        const level = params.get('livello') as CustomLevel | null
+        const parentId = params.get('in') ?? ''
+        if (level === 'category' || (level && LEVELS.includes(level) && parentId)) {
+          return { name: 'catalog-new', level, parentId: level === 'category' ? '' : parentId }
+        }
+        return { name: 'catalog' }
+      }
+      if (parts[1] === 'voce' && parts[2]) return { name: 'catalog-edit', id: parts[2] }
+      if (parts[2]) return { name: 'catalog-subcategory', categoryId: parts[1], subcategoryId: parts[2] }
+      if (parts[1]) return { name: 'catalog-category', categoryId: parts[1] }
+      return { name: 'catalog' }
+    }
     default:
       return { name: 'home' }
   }
@@ -101,6 +124,13 @@ export const paths = {
   wishlist: '#/wishlist',
   warnings: '#/avvisi',
   settings: '#/impostazioni',
+  catalog: '#/categorie',
+  catalogCategory: (categoryId: string) => `#/categorie/${enc(categoryId)}`,
+  catalogSubcategory: (categoryId: string, subcategoryId: string) =>
+    `#/categorie/${enc(categoryId)}/${enc(subcategoryId)}`,
+  catalogNew: (level: CustomLevel, parentId = '') =>
+    `#/categorie/nuova?livello=${level}${parentId ? `&in=${enc(parentId)}` : ''}`,
+  catalogEdit: (id: string) => `#/categorie/voce/${enc(id)}`,
 }
 
 /**

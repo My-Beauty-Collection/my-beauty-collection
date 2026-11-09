@@ -1,12 +1,13 @@
-import { migrateTaxonomy, ZONES, type ZoneId } from '../data/taxonomy'
+import { BEAUTY_ICONS, type BeautyIconName } from '../components/beauty-icons'
+import { isCustomId, migrateTaxonomy, OTHER_ICON, Taxonomy, ZONES, type ZoneId } from '../data/taxonomy'
 import { isIsoDate } from './dates'
 import { newId, normalizeCombos, normalizePairings } from './products'
-import type { AppData, LipCombo, Product, WishItem } from './types'
+import type { AppData, CustomLevel, CustomTaxonomyItem, LipCombo, Product, WishItem } from './types'
 
 export const STORAGE_KEY = 'my-beauty-case:data'
 
 export function emptyData(): AppData {
-  return { version: 2, products: [], wishlist: [], combos: [] }
+  return { version: 2, products: [], wishlist: [], combos: [], customTaxonomy: [] }
 }
 
 type Raw = Record<string, unknown>
@@ -90,12 +91,57 @@ export function normalizeCombo(raw: unknown): LipCombo | null {
   }
 }
 
+const LEVELS: CustomLevel[] = ['category', 'subcategory', 'type']
+const isIcon = (v: unknown): v is BeautyIconName => typeof v === 'string' && Object.hasOwn(BEAUTY_ICONS, v)
+
+/** Valida una voce personale del catalogo (il genitore si controlla in `assembleData`). */
+export function normalizeCustomItem(raw: unknown): CustomTaxonomyItem | null {
+  if (!isObject(raw) || !isCustomId(str(raw.id)) || !LEVELS.includes(raw.level as CustomLevel)) return null
+  const name = str(raw.name).trim()
+  if (!name) return null
+  const level = raw.level as CustomLevel
+  return {
+    id: str(raw.id),
+    level,
+    parentId: level === 'category' ? '' : str(raw.parentId),
+    name,
+    icon: isIcon(raw.icon) ? raw.icon : OTHER_ICON,
+    createdAt: str(raw.createdAt, new Date().toISOString()),
+  }
+}
+
 const notNull = <T,>(x: T | null): x is T => x !== null
 
-/** Mette insieme dati già validati: abbinamenti simmetrici e Combo coerenti con i prodotti. */
-export function assembleData(products: Product[], wishlist: WishItem[], combos: LipCombo[]): AppData {
-  const normalized = normalizePairings(products)
-  return { version: 2, products: normalized, wishlist, combos: normalizeCombos(combos, normalized) }
+/** Toglie i riferimenti a voci del catalogo inesistenti (es. una sottocategoria personale eliminata). */
+export function fitToTaxonomy<T extends Product | WishItem>(items: T[], taxonomy: Taxonomy): T[] {
+  return items.map((item) => {
+    const ref = taxonomy.fit(item)
+    const same = ref.categoryId === item.categoryId && ref.subcategoryId === item.subcategoryId && ref.typeId === item.typeId
+    return same ? item : { ...item, ...ref }
+  })
+}
+
+/**
+ * Mette insieme dati già validati: voci personali con un genitore esistente, prodotti e desideri
+ * coerenti con il catalogo, abbinamenti simmetrici e Combo coerenti con i prodotti.
+ */
+export function assembleData(
+  products: Product[],
+  wishlist: WishItem[],
+  combos: LipCombo[],
+  customTaxonomy: CustomTaxonomyItem[] = [],
+): AppData {
+  const unique = [...new Map(customTaxonomy.map((i) => [i.id, i])).values()]
+  const taxonomy = new Taxonomy(unique)
+  const custom = unique.filter((i) => taxonomy.has(i))
+  const normalized = normalizePairings(fitToTaxonomy(products, taxonomy))
+  return {
+    version: 2,
+    products: normalized,
+    wishlist: fitToTaxonomy(wishlist, taxonomy),
+    combos: normalizeCombos(combos, normalized),
+    customTaxonomy: custom,
+  }
 }
 
 /** Valida e normalizza dati di provenienza esterna (localStorage o file di backup, v1 o v2). */
@@ -109,6 +155,7 @@ export function parseData(json: string): AppData {
     raw.products.map(normalizeProduct).filter(notNull),
     list(raw.wishlist).map(normalizeWishItem).filter(notNull),
     list(raw.combos).map(normalizeCombo).filter(notNull),
+    list(raw.customTaxonomy).map(normalizeCustomItem).filter(notNull),
   )
 }
 

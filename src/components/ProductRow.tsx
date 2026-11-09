@@ -1,4 +1,4 @@
-import { Heart, TriangleAlert } from 'lucide-react'
+import { Heart, Trash2, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { usePhotoUrl } from '@/lib/photos'
@@ -70,6 +70,23 @@ export function HeartButton({
   )
 }
 
+/** Cestino tondo per eliminare un prodotto direttamente da una lista (es. dalle segnalazioni). */
+export function DeleteButton({ label, onClick, className }: { label: string; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Elimina ${label}`}
+      onClick={onClick}
+      className={cn(
+        'grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-destructive/10 hover:text-destructive-ink focus-visible:ring-3 focus-visible:ring-ring/60 active:bg-destructive/10',
+        className,
+      )}
+    >
+      <Trash2 className="size-[19px]" strokeWidth={1.8} />
+    </button>
+  )
+}
+
 /**
  * Riga prodotto.
  * - `title="brand"`: marca in grassetto e nome sotto (liste dell'inventario, come nel prototipo);
@@ -124,8 +141,8 @@ export function ProductRow({
   )
 }
 
-/** Riga avviso (pagina Scadenze e Home): bordo rosso, motivo e date. */
-export function WarningRow({ warning }: { warning: ProductWarning }) {
+/** Riga avviso (pagina Scadenze): bordo rosso, motivo, date e cestino per eliminare il prodotto. */
+export function WarningRow({ warning, onDelete }: { warning: ProductWarning; onDelete: () => void }) {
   return (
     <Row
       to={paths.product(warning.product.id)}
@@ -138,7 +155,7 @@ export function WarningRow({ warning }: { warning: ProductWarning }) {
           <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{warningDetail(warning)}</span>
         </>
       }
-      trailing={null}
+      trailing={<DeleteButton label={fullName(warning.product)} onClick={onDelete} className="-mr-1.5" />}
     />
   )
 }

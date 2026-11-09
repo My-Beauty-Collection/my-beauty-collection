@@ -9,6 +9,7 @@ import { Link, Row, RowList, Thumb } from './components/common'
 import { getProductType, getSubcategory } from './data/taxonomy'
 import { paths, useRoute, type ProductPrefill, type Route } from './router'
 import { useStore } from './store'
+import { CatalogCategory, CatalogHome, CatalogItemForm, CatalogSubcategory } from './views/CatalogView'
 import { ComboDetailView, CombosView } from './views/CombosView'
 import { HomeView } from './views/HomeView'
 import { CategoryPage, InventoryHome, OTHER_CATEGORY, SubcategoryPage } from './views/InventoryView'
@@ -33,6 +34,11 @@ function activeTab(route: Route): Tab {
     case 'product-edit':
     case 'product-pairings':
     case 'combo-new':
+    case 'catalog':
+    case 'catalog-category':
+    case 'catalog-subcategory':
+    case 'catalog-new':
+    case 'catalog-edit':
       return 'inventory'
     case 'product-new':
       return 'add'
@@ -310,6 +316,27 @@ function MainApp() {
       break
     case 'settings':
       view = <SettingsView />
+      break
+    case 'catalog':
+      view = <CatalogHome />
+      break
+    case 'catalog-category':
+      view = <CatalogCategory key={route.categoryId} categoryId={route.categoryId} />
+      break
+    case 'catalog-subcategory':
+      view = (
+        <CatalogSubcategory
+          key={route.subcategoryId}
+          categoryId={route.categoryId}
+          subcategoryId={route.subcategoryId}
+        />
+      )
+      break
+    case 'catalog-new':
+      view = <CatalogItemForm key={`new-${route.level}-${route.parentId}`} mode={{ kind: 'new', level: route.level, parentId: route.parentId }} />
+      break
+    case 'catalog-edit':
+      view = <CatalogItemForm key={`edit-${route.id}`} mode={{ kind: 'edit', id: route.id }} />
       break
   }
 

@@ -1,5 +1,7 @@
+import { customDescendants, Taxonomy } from '../data/taxonomy'
 import { normalizeCombos, normalizePairings, removeProduct, syncPairings } from './products'
-import type { AppData, LipCombo, Product, WishItem } from './types'
+import { fitToTaxonomy } from './storage'
+import type { AppData, CustomTaxonomyItem, LipCombo, Product, WishItem } from './types'
 
 export type Action =
   | { type: 'product/save'; product: Product }
@@ -11,6 +13,9 @@ export type Action =
   | { type: 'combo/save'; combo: LipCombo }
   | { type: 'combo/patch'; id: string; patch: Partial<Omit<LipCombo, 'id' | 'productIds'>> }
   | { type: 'combo/delete'; id: string }
+  | { type: 'taxonomy/save'; item: CustomTaxonomyItem }
+  /** Elimina la voce personale e quelle che contiene; i prodotti passano al livello superiore. */
+  | { type: 'taxonomy/delete'; id: string }
   | { type: 'data/replace'; data: AppData }
   | { type: 'data/append'; products: Product[]; wishlist: WishItem[]; combos: LipCombo[] }
 
@@ -65,6 +70,29 @@ export function reducer(state: AppData, action: Action): AppData {
 
     case 'combo/delete':
       return { ...state, combos: state.combos.filter((c) => c.id !== action.id) }
+
+    case 'taxonomy/save': {
+      const item = { ...action.item, name: action.item.name.trim() }
+      if (!item.name) return state
+      return { ...state, customTaxonomy: upsert(state.customTaxonomy, item) }
+    }
+
+    case 'taxonomy/delete': {
+      const removed = customDescendants(state.customTaxonomy, action.id)
+      const customTaxonomy = state.customTaxonomy.filter((i) => !removed.has(i.id))
+      const taxonomy = new Taxonomy(customTaxonomy)
+      // Una categoria personale eliminata: i suoi prodotti restano, senza categoria (in "Altro").
+      const detach = <T extends Product | WishItem>(x: T): T => (removed.has(x.categoryId) ? { ...x, categoryId: '' } : x)
+      const products = fitToTaxonomy(state.products.map(detach), taxonomy).map((p, i) =>
+        p === state.products[i] ? p : { ...p, updatedAt: now },
+      )
+      return {
+        ...state,
+        customTaxonomy,
+        products: normalizePairings(products),
+        wishlist: fitToTaxonomy(state.wishlist.map(detach), taxonomy),
+      }
+    }
 
     case 'data/replace':
       return action.data

@@ -6,8 +6,8 @@
  * Questo modulo contiene le parti pure (mapping righe ↔ oggetti, diff) più le chiamate al client.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { assembleData, normalizeCombo, normalizeProduct, normalizeWishItem } from './storage'
-import type { AppData, LipCombo, Product, WishItem } from './types'
+import { assembleData, normalizeCombo, normalizeCustomItem, normalizeProduct, normalizeWishItem } from './storage'
+import type { AppData, CustomTaxonomyItem, LipCombo, Product, WishItem } from './types'
 
 // ---------- Mapping ----------
 
@@ -54,6 +54,17 @@ export interface ComboRow {
   note: string
   created_at: string
   updated_at: string
+}
+
+/** Voce personale del catalogo (tabella `custom_taxonomy`). */
+export interface CustomRow {
+  user_id: string
+  id: string
+  level: string
+  parent_id: string
+  name: string
+  icon: string
+  created_at: string
 }
 
 const PRODUCT_COLUMNS =
@@ -156,6 +167,29 @@ export function rowToCombo(row: Omit<ComboRow, 'user_id'>): LipCombo | null {
   })
 }
 
+export function customToRow(i: CustomTaxonomyItem, userId: string): CustomRow {
+  return {
+    user_id: userId,
+    id: i.id,
+    level: i.level,
+    parent_id: i.parentId,
+    name: i.name,
+    icon: i.icon,
+    created_at: i.createdAt,
+  }
+}
+
+export function rowToCustom(row: Omit<CustomRow, 'user_id'>): CustomTaxonomyItem | null {
+  return normalizeCustomItem({
+    id: row.id,
+    level: row.level,
+    parentId: row.parent_id,
+    name: row.name,
+    icon: row.icon,
+    createdAt: row.created_at,
+  })
+}
+
 // ---------- Diff ----------
 
 export interface Changes {
@@ -165,6 +199,8 @@ export interface Changes {
   deleteWishIds: string[]
   upsertCombos: LipCombo[]
   deleteComboIds: string[]
+  upsertCustom: CustomTaxonomyItem[]
+  deleteCustomIds: string[]
 }
 
 function same<T>(a: T, b: T): boolean {
@@ -187,6 +223,7 @@ export function diffData(prev: AppData, next: AppData): Changes {
   const products = diffById(prev.products, next.products)
   const wishes = diffById(prev.wishlist, next.wishlist)
   const combos = diffById(prev.combos, next.combos)
+  const custom = diffById(prev.customTaxonomy, next.customTaxonomy)
   return {
     upsertProducts: products.upsert,
     deleteProductIds: products.remove,
@@ -194,6 +231,8 @@ export function diffData(prev: AppData, next: AppData): Changes {
     deleteWishIds: wishes.remove,
     upsertCombos: combos.upsert,
     deleteComboIds: combos.remove,
+    upsertCustom: custom.upsert,
+    deleteCustomIds: custom.remove,
   }
 }
 
@@ -218,15 +257,17 @@ async function selectAll<T>(client: SupabaseClient, table: string, columns = '*'
 const notNull = <T,>(x: T | null): x is T => x !== null
 
 export async function fetchAll(client: SupabaseClient): Promise<AppData> {
-  const [productRows, wishRows, comboRows] = await Promise.all([
+  const [productRows, wishRows, comboRows, customRows] = await Promise.all([
     selectAll<ProductRow>(client, 'products', PRODUCT_COLUMNS),
     selectAll<WishRow>(client, 'wish_items'),
     selectAll<ComboRow>(client, 'lip_combos'),
+    selectAll<CustomRow>(client, 'custom_taxonomy'),
   ])
   return assembleData(
     productRows.map(rowToProduct).filter(notNull),
     wishRows.map(rowToWish).filter(notNull).reverse(),
     comboRows.map(rowToCombo).filter(notNull).reverse(),
+    customRows.map(rowToCustom).filter(notNull),
   )
 }
 
@@ -238,7 +279,10 @@ export async function pushChanges(client: SupabaseClient, userId: string, c: Cha
   const remove = async (table: string, ids: string[]) => {
     if (ids.length) check(await client.from(table).delete().eq('user_id', userId).in('id', ids))
   }
-  // Prima i prodotti, poi le Combo che li referenziano; le eliminazioni in ordine inverso.
+  // Prima il catalogo personale e i prodotti, poi le Combo che li referenziano; le eliminazioni in ordine inverso.
+  if (c.upsertCustom.length) {
+    check(await client.from('custom_taxonomy').upsert(c.upsertCustom.map((i) => customToRow(i, userId)), onConflict))
+  }
   if (c.upsertProducts.length) {
     check(await client.from('products').upsert(c.upsertProducts.map((p) => productToRow(p, userId)), onConflict))
   }
@@ -251,4 +295,5 @@ export async function pushChanges(client: SupabaseClient, userId: string, c: Cha
   await remove('lip_combos', c.deleteComboIds)
   await remove('wish_items', c.deleteWishIds)
   await remove('products', c.deleteProductIds)
+  await remove('custom_taxonomy', c.deleteCustomIds)
 }

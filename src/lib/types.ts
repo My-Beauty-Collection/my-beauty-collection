@@ -1,3 +1,4 @@
+import type { BeautyIconName } from '../components/beauty-icons'
 import type { ZoneId } from '../data/taxonomy'
 
 /** Scheda prodotto essenziale (requisiti §5). */
@@ -56,11 +57,29 @@ export interface LipCombo {
   updatedAt: string
 }
 
+export type CustomLevel = 'category' | 'subcategory' | 'type'
+
+/**
+ * Voce del catalogo aggiunta dall'utente (solo per sé): le predefinite restano uguali per tutti.
+ * `parentId`: vuoto per una categoria, la categoria per una sottocategoria, la sottocategoria per una tipologia.
+ */
+export interface CustomTaxonomyItem {
+  /** Sempre con il prefisso `u-`, per non confondersi con le voci predefinite. */
+  id: string
+  level: CustomLevel
+  parentId: string
+  name: string
+  icon: BeautyIconName
+  createdAt: string
+}
+
 export interface AppData {
   version: 2
   products: Product[]
   wishlist: WishItem[]
   combos: LipCombo[]
+  /** Categorie, sottocategorie e tipologie personali. */
+  customTaxonomy: CustomTaxonomyItem[]
 }
 
 export const PAO_OPTIONS = [3, 6, 9, 12, 18, 24, 36] as const

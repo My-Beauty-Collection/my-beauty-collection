@@ -1,4 +1,4 @@
-import { Heart, Search, SearchX, X } from 'lucide-react'
+import { Heart, Pencil, Search, SearchX, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -6,7 +6,7 @@ import { BeautyIcon } from '../components/BeautyIcon'
 import { Chip, ChipRow, EmptyState, Link, PageHeader, Row, RowList, SegmentedTabs, Thumb } from '../components/common'
 import { ProductRow } from '../components/ProductRow'
 import { demoData } from '../data/demo'
-import { CATEGORIES, getCategory, getProductType, getSubcategory, LIP_LINER_TYPE, OTHER_ICON } from '../data/taxonomy'
+import { getProductType, LIP_LINER_TYPE, OTHER_ICON, usesTypes } from '../data/taxonomy'
 import { matchesSearch } from '../lib/products'
 import type { Product } from '../lib/types'
 import { navigate, paths } from '../router'
@@ -18,7 +18,6 @@ export const OTHER_CATEGORY = '_altro'
 export const NO_SUBCATEGORY = '_nessuna'
 
 const byName = (a: Product, b: Product) => (a.brand || a.name).localeCompare(b.brand || b.name, 'it')
-const known = new Set(CATEGORIES.map((c) => c.id))
 const productsLabel = (n: number) => `${n} prodott${n === 1 ? 'o' : 'i'}`
 
 function SearchField({
@@ -55,6 +54,17 @@ function SearchField({
   )
 }
 
+/** Pulsante dell'intestazione per gestire il catalogo (aggiungere categorie personali). */
+function EditCatalogButton({ to }: { to: string }) {
+  return (
+    <Button asChild variant="outline" size="sm" className="h-9 px-3">
+      <Link to={to}>
+        <Pencil className="size-3.5" /> Categorie
+      </Link>
+    </Button>
+  )
+}
+
 function FavoritesChip({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <Chip on={on} onClick={onToggle}>
@@ -86,18 +96,18 @@ function ProductRows({ products, emptyText }: { products: Product[]; emptyText?:
 // ---------- Inventario: categorie ----------
 
 export function InventoryHome({ query, setQuery }: { query: string; setQuery: (q: string) => void }) {
-  const { data, dispatch, today } = useStore()
+  const { data, dispatch, today, taxonomy } = useStore()
   const { products } = data
   const [favorites, setFavorites] = useState(false)
 
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     for (const p of products) {
-      const key = known.has(p.categoryId) ? p.categoryId : OTHER_CATEGORY
+      const key = taxonomy.getCategory(p.categoryId) ? p.categoryId : OTHER_CATEGORY
       m.set(key, (m.get(key) ?? 0) + 1)
     }
     return m
-  }, [products])
+  }, [products, taxonomy])
 
   const listing = query.trim() !== '' || favorites
   const results = useMemo(
@@ -126,13 +136,13 @@ export function InventoryHome({ query, setQuery }: { query: string; setQuery: (q
   }
 
   const rows = [
-    ...CATEGORIES.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+    ...taxonomy.categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
     ...(counts.get(OTHER_CATEGORY) ? [{ id: OTHER_CATEGORY, name: 'Altro', icon: OTHER_ICON }] : []),
   ]
 
   return (
     <>
-      <PageHeader title="Inventario" />
+      <PageHeader title="Inventario" actions={<EditCatalogButton to={paths.catalog} />} />
       <SearchField value={query} onChange={setQuery} />
       <ChipRow className="mt-0">
         <FavoritesChip on={favorites} onToggle={() => setFavorites((v) => !v)} />
@@ -160,19 +170,20 @@ export function InventoryHome({ query, setQuery }: { query: string; setQuery: (q
 // ---------- Categoria: sottocategorie (Make-up: schede per zona e righe per tipologia) ----------
 
 export function CategoryPage({ categoryId, tab }: { categoryId: string; tab: string | null }) {
-  const { data } = useStore()
+  const { data, taxonomy } = useStore()
   const [query, setQuery] = useState('')
-  const category = getCategory(categoryId)
+  const category = taxonomy.getCategory(categoryId)
   const inCategory = data.products.filter((p) =>
-    categoryId === OTHER_CATEGORY ? !known.has(p.categoryId) : p.categoryId === categoryId,
+    categoryId === OTHER_CATEGORY ? !taxonomy.getCategory(p.categoryId) : p.categoryId === categoryId,
   )
+  const editCatalog = category && <EditCatalogButton to={paths.catalogCategory(category.id)} />
 
   // Profumi (nessuna sottocategoria) e "Altro": direttamente la lista dei prodotti.
   if (!category || category.subcategories.length === 0) {
     const visible = inCategory.filter((p) => matchesSearch(p, query)).sort(byName)
     return (
       <>
-        <PageHeader back={paths.inventory} title={category?.name ?? 'Altro'} />
+        <PageHeader back={paths.inventory} title={category?.name ?? 'Altro'} actions={editCatalog} />
         {!category && (
           <p className="-mt-2 mb-3 text-[13px] text-muted-foreground">
             Prodotti di categorie non più previste: aprili e scegli una nuova categoria.
@@ -184,14 +195,13 @@ export function CategoryPage({ categoryId, tab }: { categoryId: string; tab: str
     )
   }
 
-  const withTypes = category.subcategories.some((s) => s.types.length > 0)
   const unsorted = inCategory.filter((p) => !p.subcategoryId).length
 
   // Categorie senza tipologie (Skincare, Solari…): una riga per sottocategoria.
-  if (!withTypes) {
+  if (!usesTypes(category.id)) {
     return (
       <>
-        <PageHeader back={paths.inventory} title={category.name} />
+        <PageHeader back={paths.inventory} title={category.name} actions={editCatalog} />
         <RowList>
           {category.subcategories.map((s) => (
             <Row
@@ -222,32 +232,38 @@ export function CategoryPage({ categoryId, tab }: { categoryId: string; tab: str
 
   return (
     <>
-      <PageHeader back={paths.inventory} title={category.name} />
+      <PageHeader back={paths.inventory} title={category.name} actions={editCatalog} />
       <SegmentedTabs
         ariaLabel="Zona"
         value={active.id}
         onChange={(sub) => navigate(paths.category(category.id, sub), { replace: true })}
         options={category.subcategories.map((s) => ({ value: s.id, label: s.name }))}
+        className={category.subcategories.length > 4 ? '-mx-4 w-auto overflow-x-auto px-4 [scrollbar-width:none]' : undefined}
       />
-      <RowList>
-        {active.types.map((t) => (
-          <Row
-            key={t.id}
-            to={paths.subcategory(category.id, active.id, t.id)}
-            media={<Thumb icon={t.icon} />}
-            title={t.name}
-            subtitle={productsLabel(inSub.filter((p) => p.typeId === t.id).length)}
-          />
-        ))}
-        {untyped > 0 && (
-          <Row
-            to={paths.subcategory(category.id, active.id, NO_SUBCATEGORY)}
-            media={<Thumb icon={active.icon} />}
-            title="Senza tipologia"
-            subtitle={productsLabel(untyped)}
-          />
-        )}
-      </RowList>
+      {/* Una zona personale senza tipologie: direttamente i suoi prodotti. */}
+      {active.types.length === 0 ? (
+        <ProductRows products={[...inSub].sort(byName)} />
+      ) : (
+        <RowList>
+          {active.types.map((t) => (
+            <Row
+              key={t.id}
+              to={paths.subcategory(category.id, active.id, t.id)}
+              media={<Thumb icon={t.icon} />}
+              title={t.name}
+              subtitle={productsLabel(inSub.filter((p) => p.typeId === t.id).length)}
+            />
+          ))}
+          {untyped > 0 && (
+            <Row
+              to={paths.subcategory(category.id, active.id, NO_SUBCATEGORY)}
+              media={<Thumb icon={active.icon} />}
+              title="Senza tipologia"
+              subtitle={productsLabel(untyped)}
+            />
+          )}
+        </RowList>
+      )}
       {unsorted > 0 && (
         <Link
           to={paths.subcategory(category.id, NO_SUBCATEGORY)}
@@ -271,12 +287,12 @@ export function SubcategoryPage({
   subcategoryId: string
   typeId: string | null
 }) {
-  const { data } = useStore()
+  const { data, taxonomy } = useStore()
   const [favorites, setFavorites] = useState(false)
   const [query, setQuery] = useState('')
-  const category = getCategory(categoryId)
-  const subcategory = getSubcategory(subcategoryId)
-  const type = getProductType(typeId)
+  const category = taxonomy.getCategory(categoryId)
+  const subcategory = taxonomy.getSubcategory(subcategoryId)
+  const type = taxonomy.getProductType(typeId)
   const untypedOnly = typeId === NO_SUBCATEGORY
 
   const inList = data.products.filter(

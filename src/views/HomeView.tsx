@@ -4,9 +4,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { cn } from '@/lib/utils'
 import { BeautyIcon } from '../components/BeautyIcon'
 import { cardClass, IconBubble, Link, WideCard } from '../components/common'
-import { ProductThumb, WarningLabel } from '../components/ProductRow'
-import { CATEGORIES, OTHER_ICON } from '../data/taxonomy'
+import { DeleteProductDialog } from '../components/DeleteProductDialog'
+import { DeleteButton, ProductThumb, WarningLabel } from '../components/ProductRow'
+import { OTHER_ICON } from '../data/taxonomy'
 import { fullName, warningDetail, type ProductWarning } from '../lib/products'
+import type { Product } from '../lib/types'
 import { paths } from '../router'
 import { useStore } from '../store'
 import { OTHER_CATEGORY } from './InventoryView'
@@ -17,10 +19,14 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const PREVIEW = 3
 const OPEN_KEY = 'my-beauty-case:home-warnings'
 
-/** Segnalazioni in Home: riquadro apribile con le prime voci e il collegamento alla pagina completa. */
+/**
+ * Segnalazioni in Home: riquadro apribile con le prime voci, ciascuna con il cestino
+ * per eliminare subito il prodotto, e il collegamento alla pagina completa.
+ */
 function WarningsAccordion({ warnings }: { warnings: ProductWarning[] }) {
   // Aperto per impostazione; se lo chiudi resta chiuso anche alle visite successive.
   const [open, setOpen] = useState(() => localStorage.getItem(OPEN_KEY) !== 'closed')
+  const [toDelete, setToDelete] = useState<Product | null>(null)
   const toggle = (value: string) => {
     const next = value === 'warnings'
     setOpen(next)
@@ -29,73 +35,79 @@ function WarningsAccordion({ warnings }: { warnings: ProductWarning[] }) {
   const n = warnings.length
 
   return (
-    <Accordion
-      type="single"
-      collapsible
-      value={open ? 'warnings' : ''}
-      onValueChange={toggle}
-      className={cn(cardClass, 'mb-3 overflow-hidden border-l-4 border-l-destructive')}
-    >
-      <AccordionItem value="warnings">
-        <AccordionTrigger className="items-center gap-3.5 rounded-none p-[15px] hover:no-underline **:data-[slot=accordion-trigger-icon]:size-5 **:data-[slot=accordion-trigger-icon]:text-foreground/70">
-          <IconBubble className="bg-destructive/10 text-destructive-ink">
-            <TriangleAlert />
-          </IconBubble>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-bold">Scadenze e avvertenze</span>
-            <span className="block text-[13px] font-normal text-destructive-ink">
-              {plural(n, 'prodotto', 'prodotti')} con limite superato
+    <>
+      <Accordion
+        type="single"
+        collapsible
+        value={open ? 'warnings' : ''}
+        onValueChange={toggle}
+        className={cn(cardClass, 'overflow-hidden border-l-4 border-l-destructive')}
+      >
+        <AccordionItem value="warnings">
+          <AccordionTrigger className="items-center gap-3.5 rounded-none p-[15px] hover:no-underline **:data-[slot=accordion-trigger-icon]:size-5 **:data-[slot=accordion-trigger-icon]:text-foreground/70">
+            <IconBubble className="bg-destructive/10 text-destructive-ink">
+              <TriangleAlert />
+            </IconBubble>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-bold">Scadenze e avvertenze</span>
+              <span className="block text-[13px] font-normal text-destructive-ink">
+                {plural(n, 'prodotto', 'prodotti')} con limite superato
+              </span>
             </span>
-          </span>
-        </AccordionTrigger>
-        <AccordionContent className="h-auto p-0 [&_a]:no-underline">
-          <ul className="divide-y border-t">
-            {warnings.slice(0, PREVIEW).map((w) => (
-              <li key={w.product.id} className="relative flex items-center gap-3 px-[15px] py-2.5">
-                <ProductThumb product={w.product} className="h-[46px] w-9 rounded-[9px] text-xl" />
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={paths.product(w.product.id)}
-                    className="line-clamp-1 text-sm font-bold outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/60 focus-visible:after:ring-inset"
-                  >
-                    {fullName(w.product)}
-                  </Link>
-                  <WarningLabel warning={w} className="text-xs" />
-                  <span className="block truncate text-[11.5px] text-muted-foreground">{warningDetail(w)}</span>
-                </div>
-                <ChevronRight className="size-4.5 shrink-0 text-foreground/50" aria-hidden />
-              </li>
-            ))}
-          </ul>
-          <Link
-            to={paths.warnings}
-            className="flex items-center justify-center gap-1 border-t px-4 py-3 text-sm font-bold text-rose-ink outline-none hover:bg-accent/40 focus-visible:bg-accent/60"
-          >
-            {n > PREVIEW ? `Vedi tutte le segnalazioni (${n})` : 'Vai alla pagina delle segnalazioni'}
-            <ChevronRight className="size-4" aria-hidden />
-          </Link>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
+          </AccordionTrigger>
+          <AccordionContent className="h-auto p-0 [&_a]:no-underline">
+            <ul className="divide-y border-t">
+              {warnings.slice(0, PREVIEW).map((w) => (
+                <li key={w.product.id} className="relative flex items-center gap-3 px-[15px] py-2.5">
+                  <ProductThumb product={w.product} className="h-[46px] w-9 rounded-[9px] text-xl" />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={paths.product(w.product.id)}
+                      className="line-clamp-1 text-sm font-bold outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/60 focus-visible:after:ring-inset"
+                    >
+                      {fullName(w.product)}
+                    </Link>
+                    <WarningLabel warning={w} className="text-xs" />
+                    <span className="block truncate text-[11.5px] text-muted-foreground">{warningDetail(w)}</span>
+                  </div>
+                  <DeleteButton
+                    label={fullName(w.product)}
+                    onClick={() => setToDelete(w.product)}
+                    className="relative z-10 -mr-2"
+                  />
+                </li>
+              ))}
+            </ul>
+            <Link
+              to={paths.warnings}
+              className="flex items-center justify-center gap-1 border-t px-4 py-3 text-sm font-bold text-rose-ink outline-none hover:bg-accent/40 focus-visible:bg-accent/60"
+            >
+              {n > PREVIEW ? `Vedi tutte le segnalazioni (${n})` : 'Vai alla pagina delle segnalazioni'}
+              <ChevronRight className="size-4" aria-hidden />
+            </Link>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+      <DeleteProductDialog product={toDelete} onClose={() => setToDelete(null)} />
+    </>
   )
 }
 
 export function HomeView() {
-  const { data, warnings, displayName } = useStore()
+  const { data, warnings, displayName, taxonomy } = useStore()
   const { products } = data
 
   const counts = useMemo(() => {
-    const known = new Set(CATEGORIES.map((c) => c.id))
     const m = new Map<string, number>()
     for (const p of products) {
-      const key = known.has(p.categoryId) ? p.categoryId : OTHER_CATEGORY
+      const key = taxonomy.getCategory(p.categoryId) ? p.categoryId : OTHER_CATEGORY
       m.set(key, (m.get(key) ?? 0) + 1)
     }
     return m
-  }, [products])
+  }, [products, taxonomy])
 
   const tiles = [
-    ...CATEGORIES.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+    ...taxonomy.categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
     ...(counts.get(OTHER_CATEGORY) ? [{ id: OTHER_CATEGORY, name: 'Altro', icon: OTHER_ICON }] : []),
   ]
 
@@ -116,8 +128,6 @@ export function HomeView() {
           <Plus className="size-6" />
         </Link>
       </div>
-
-      {warnings.length > 0 && <WarningsAccordion warnings={warnings} />}
 
       <Link
         to={paths.inventory}
@@ -162,7 +172,10 @@ export function HomeView() {
           description="Scopri le tue combo e crea nuovi look"
         />
         <WideCard to={paths.wishlist} icon={<Heart />} title="Wishlist" description="I prodotti che vuoi acquistare" />
-        {warnings.length === 0 && (
+        {/* Le segnalazioni restano sempre qui in fondo, che ce ne siano o no. */}
+        {warnings.length > 0 ? (
+          <WarningsAccordion warnings={warnings} />
+        ) : (
           <WideCard
             to={paths.warnings}
             icon={<ShieldCheck />}

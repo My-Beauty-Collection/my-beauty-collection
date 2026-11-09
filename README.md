@@ -6,13 +6,18 @@ Web app mobile-first con i dati su Supabase.
 ## Funzionalità
 
 - **Home** con saluto personalizzato, accesso diretto a Inventario (e alle sue categorie), Lip Combo e Wishlist,
-  e le **segnalazioni a fisarmonica**: le prime tre, con il collegamento alla pagina Scadenze e avvertenze
-  (nessun riepilogo di prodotti aperti, quasi finiti o in scadenza).
+  e in fondo le **segnalazioni a fisarmonica**: le prime tre, ciascuna con il cestino per eliminare subito il prodotto,
+  e il collegamento alla pagina Scadenze e avvertenze (anche lì con il cestino su ogni riga).
+  Nessun riepilogo di prodotti aperti, quasi finiti o in scadenza.
 - **Inventario** per macro-categoria → sottocategoria (→ tipologia per il Make-up), es.
   *Make-up › Labbra › Matite labbra › Nabla #05*. Ricerca e filtro preferiti.
   Un prodotto multiuso si registra una sola volta, con più **zone d'uso**.
+- **Categorie personali**: le categorie predefinite sono uguali per tutti; ogni utente può aggiungere solo per sé
+  categorie, sottocategorie (anche dentro quelle predefinite) e, nel Make-up, tipologie, con nome e icona
+  (Inventario → *Categorie*, oppure Impostazioni). Eliminandone una, i suoi prodotti passano al livello superiore.
 - **Scheda prodotto essenziale**: foto (facoltativa), marca, nome, categoria, data di apertura, PAO,
   scadenza della confezione (facoltativa), valutazione 1–5 stelle, preferito, nota.
+  Un prodotto non ancora aperto ha il pulsante rapido **Aperto oggi**, senza passare dal modulo di modifica.
 - **PAO**: la fine PAO è calcolata da data di apertura + PAO (10/11/2026 + 12M → 10/11/2027).
 - **Avvisi solo a limite superato**: "PAO superato" e "Scaduto" compaiono dal giorno dopo il limite;
   nessun avviso preventivo né countdown.
@@ -29,8 +34,8 @@ La tassonomia è in [`src/data/taxonomy.ts`](src/data/taxonomy.ts).
 ## Configurazione Supabase
 
 La struttura del database è in [`supabase/migrations/`](supabase/migrations/): tabelle `products`, `wish_items`,
-`lip_combos` e il bucket privato `product-photos` per le foto, tutto con Row Level Security
-(ogni utente vede solo i propri dati).
+`lip_combos`, `custom_taxonomy` (categorie personali) e il bucket privato `product-photos` per le foto,
+tutto con Row Level Security (ogni utente vede solo i propri dati).
 
 1. Valori del progetto in `.env.local` (vedi `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
    e, solo per gli script locali, `SUPABASE_SECRET_KEY`. Il file non finisce su git.

@@ -1,4 +1,4 @@
-import { Pencil, Plus, SearchX, Trash2, TriangleAlert } from 'lucide-react'
+import { PackageOpen, Pencil, Plus, SearchX, Trash2, TriangleAlert } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import {
   cardClass,
   Chip,
   ChipRow,
-  ConfirmDialog,
   EmptyState,
   Hero,
   Link,
@@ -18,6 +17,7 @@ import {
   SectionTitle,
 } from '../components/common'
 import { BeautyIcon } from '../components/BeautyIcon'
+import { DeleteProductDialog } from '../components/DeleteProductDialog'
 import { HeartButton, ProductRow } from '../components/ProductRow'
 import { StarRating } from '../components/Stars'
 import { getZone, taxonomyIcon } from '../data/taxonomy'
@@ -56,11 +56,59 @@ function Picture({ product }: { product: Product }) {
   )
 }
 
+/**
+ * Apertura del prodotto: se non è ancora aperto, il pulsante rapido "Aperto oggi"
+ * (senza passare dal modulo di modifica); altrimenti la data di apertura e la fine PAO.
+ */
+function OpenedCard({ product, today, onOpenToday }: { product: Product; today: string; onOpenToday: () => void }) {
+  const end = paoEnd(product)
+  return (
+    <div className={cn(cardClass, 'mt-4 flex items-center gap-3 p-[13px]')}>
+      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-thumb text-rose-ink" aria-hidden>
+        <PackageOpen className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1 text-[13px]">
+        {product.openedDate ? (
+          <>
+            <p className="text-[15px] font-bold">
+              {product.openedDate === today ? 'Aperto oggi' : `Aperto il ${formatDate(product.openedDate)}`}
+            </p>
+            <p className="text-muted-foreground">
+              {end ? (
+                `Fine PAO il ${formatDate(end)}`
+              ) : (
+                <>
+                  Nessun PAO indicato ·{' '}
+                  <Link to={paths.productEdit(product.id)} className="font-bold text-rose-ink">
+                    Aggiungilo
+                  </Link>
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-[15px] font-bold">Non ancora aperto</p>
+            <p className="text-muted-foreground">
+              {product.paoMonths ? `PAO ${product.paoMonths}M dal giorno di apertura` : 'Segna quando lo apri'}
+            </p>
+          </>
+        )}
+      </div>
+      {!product.openedDate && (
+        <Button className="h-10 shrink-0 px-3.5" onClick={onOpenToday}>
+          Aperto oggi
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export function ProductDetailView({ id, tab }: { id: string; tab: ProductTab }) {
-  const { data, dispatch, today, removePhoto } = useStore()
+  const { data, dispatch, today } = useStore()
   const { products, combos } = data
   const product = products.find((p) => p.id === id)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [toDelete, setToDelete] = useState<Product | null>(null)
 
   if (!product) {
     return (
@@ -93,11 +141,11 @@ export function ProductDetailView({ id, tab }: { id: string; tab: ProductTab }) 
     { value: 'info', label: 'Info' },
   ]
 
-  const remove = () => {
-    removePhoto(product.photo)
-    dispatch({ type: 'product/delete', id: product.id })
-    toast.success(`"${product.name}" eliminato`)
-    navigate(paths.inventory, { replace: true })
+  const openToday = () => {
+    patch({ openedDate: today })
+    toast.success('Segnato come aperto oggi', {
+      action: { label: 'Annulla', onClick: () => patch({ openedDate: null }) },
+    })
   }
 
   return (
@@ -151,6 +199,8 @@ export function ProductDetailView({ id, tab }: { id: string; tab: ProductTab }) 
           </div>
         </div>
       )}
+
+      <OpenedCard product={product} today={today} onOpenToday={openToday} />
 
       <ChipRow className="mt-4 mb-3">
         {tabs.map((t) => (
@@ -283,7 +333,7 @@ export function ProductDetailView({ id, tab }: { id: string; tab: ProductTab }) 
               variant="ghost"
               size="lg"
               className="text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => setToDelete(product)}
             >
               <Trash2 className="size-4" /> Elimina prodotto
             </Button>
@@ -291,18 +341,10 @@ export function ProductDetailView({ id, tab }: { id: string; tab: ProductTab }) 
         </>
       )}
 
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title="Eliminare il prodotto?"
-        description={
-          productCombos.length > 0
-            ? `"${product.name}" verrà eliminato insieme ai suoi abbinamenti e tolto dalle Lip Combo (quelle che restano con un solo prodotto vengono eliminate).`
-            : `"${product.name}" verrà eliminato definitivamente.`
-        }
-        confirmLabel="Elimina"
-        destructive
-        onConfirm={remove}
+      <DeleteProductDialog
+        product={toDelete}
+        onClose={() => setToDelete(null)}
+        onDeleted={() => navigate(paths.inventory, { replace: true })}
       />
     </>
   )
