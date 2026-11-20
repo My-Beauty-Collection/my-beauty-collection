@@ -37,16 +37,21 @@ La struttura del database è in [`supabase/migrations/`](supabase/migrations/): 
 `lip_combos`, `custom_taxonomy` (categorie personali) e il bucket privato `product-photos` per le foto,
 tutto con Row Level Security (ogni utente vede solo i propri dati).
 
-1. Valori del progetto in `.env.local` (vedi `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-   e, solo per gli script locali, `SUPABASE_SECRET_KEY`. Il file non finisce su git.
-2. Applicare le migrazioni con la Supabase CLI:
+1. Valori del progetto in `.env.local` (vedi `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+   `SUPABASE_DB_URL` (connection string del **Session pooler**: la connessione diretta `db.<ref>.supabase.co`
+   è solo IPv6) e, solo per gli script locali, `SUPABASE_SECRET_KEY`. Il file non finisce su git.
+2. Applicare le migrazioni con la Supabase CLI, usando la connection string:
    ```bash
-   npx supabase login                                   # una volta sola, apre il browser
-   npx supabase link --project-ref <project-ref>        # una volta sola
-   npx supabase db push --remote                        # applica le migrazioni nuove
+   set -a && . ./.env.local && set +a
+   npx supabase db push --remote="$SUPABASE_DB_URL" --dry-run   # mostra cosa verrebbe applicato
+   npx supabase db push --remote="$SUPABASE_DB_URL"             # applica le migrazioni nuove
    ```
+   In alternativa, con l'account Supabase proprietario del progetto: `npx supabase login`,
+   `npx supabase link --project-ref <project-ref>`, poi `npx supabase db push --remote`.
    ⚠️ Usare sempre `--remote`: senza, la CLI prova ad applicarle a un database Supabase locale (Docker).
-   Per una modifica futura: `npx supabase migration new <nome>`, scrivere l'SQL, poi `db push --remote`.
+   Per una modifica futura: `npx supabase migration new <nome>`, scrivere l'SQL, poi il `db push` qui sopra.
+   I progetti Supabase recenti non danno in automatico i permessi sulle nuove tabelle all'API: ogni tabella nuova
+   va accompagnata da una `grant ... to authenticated` (vedi `20261120090000_data_api_grants.sql`).
 3. Account: si creano dall'app, scheda **Crea account** nella schermata di accesso.
    Con "Confirm email" attivo (Authentication → Sign In / Providers → Email) arriva un'email con un link di conferma:
    in quel caso impostare in **Authentication → URL Configuration** il Site URL all'indirizzo dell'app
